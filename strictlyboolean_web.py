@@ -151,11 +151,14 @@ def provenance_lines(candidate):
     return lines
 
 
-def brave_search_page(query, offset):
+def brave_search_page(query, offset, request_guard=None):
     if not BRAVE_API_KEY:
         raise RuntimeError(
             "BRAVE_API_KEY environment variable is not set."
         )
+
+    if request_guard is not None:
+        request_guard()
 
     headers = {
         "Accept": "application/json",
@@ -203,7 +206,13 @@ def brave_search_page(query, offset):
     return candidates
 
 
-def retrieve_candidates(queries, verbose=True, return_stats=False, pages=SEARCH_PAGES):
+def retrieve_candidates(
+    queries,
+    verbose=True,
+    return_stats=False,
+    pages=SEARCH_PAGES,
+    request_guard=None,
+):
     raw_candidates = []
     branch_stats = []
 
@@ -217,7 +226,9 @@ def retrieve_candidates(queries, verbose=True, return_stats=False, pages=SEARCH_
         page_counts = []
 
         for offset in range(pages):
-            candidates = brave_search_page(query, offset)
+            candidates = brave_search_page(
+                query, offset, request_guard=request_guard
+            )
             page_counts.append(len(candidates))
 
             if verbose:

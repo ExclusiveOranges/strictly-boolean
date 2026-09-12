@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.5.3
+
+- Set the public-beta default Brave ceilings to 500 requests/day and 8,000 requests/month.
+
+- Added persistent daily and monthly Brave API request ceilings backed by SQLite.
+- Added per-IP rolling hourly and daily search rate limits.
+- Added a persistent cache for identical completed searches; cached searches avoid new Brave requests and live-page verification.
+- Added environment configuration for public-beta limits and reverse-proxy handling.
+- Added explicit UI indication when a result set is served from cache.
+
 ## v1.5.2
 
 - Added concurrent live candidate verification with a bounded worker pool.

@@ -14,7 +14,7 @@
                 <a id="eighties-logo" class="eighties-logo" href="/" hidden aria-label="Strictly Boolean home">
                     <img src="{{ url_for('eighties_logo') }}" alt="STRICTLY BOOLEAN">
                 </a>
-                <span class="version">v1.5.2 prototype</span>
+                <span class="version">v1.5.3 prototype</span>
             </div>
             <div class="tagline">Search for what you typed</div>
             <button id="logo-toggle" class="logo-toggle" type="button" aria-pressed="false">Logo</button>
@@ -225,6 +225,9 @@
                 {% if search.adaptive_retrieval and search.adaptive_retrieval.deepened %}
                     · retrieval deepened
                 {% endif %}
+                {% if search.cache and search.cache.hit %}
+                    · cached
+                {% endif %}
             </div>
 
             <section class="summary-bar">
@@ -297,6 +300,18 @@
                             {% endif %}
                         </span>
                         <div class="retrieval-stop">Stopped: {{ search.adaptive_retrieval.stop_reason }}.</div>
+                    </div>
+                    {% endif %}
+                    {% if search.cache %}
+                    <div>
+                        <div class="detail-label">Search cache</div>
+                        <span>
+                            {% if search.cache.hit %}
+                                served from cache · {{ search.cache.age_label }} old
+                            {% else %}
+                                fresh search · result cached for {{ search.cache.ttl_label }}
+                            {% endif %}
+                        </span>
                     </div>
                     {% endif %}
                 </div>
@@ -411,7 +426,7 @@
 
             // Courier is the default. Reset once for this version so an
             // earlier saved 80s choice does not override the new default.
-            const defaultVersion = 'courier-v1';
+            const defaultVersion = 'courier-v2';
             let saved = 'courier';
             try {
                 if (localStorage.getItem('strictlyBooleanLogoDefault') !== defaultVersion) {

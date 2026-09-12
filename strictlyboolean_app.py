@@ -5,6 +5,12 @@ from urllib.parse import urlsplit
 
 from strictlyboolean_core import parse_query
 from strictlyboolean_retrieval import build_retrieval_plan
+from strictlyboolean_guard import (
+    BraveBudgetExceeded,
+    GuardConfig,
+    RateLimitExceeded,
+    StateStore,
+)
 from strictlyboolean_web import (
     retrieve_candidates,
     evaluate_candidate_data,
@@ -13,6 +19,10 @@ from strictlyboolean_web import (
 )
 
 app = Flask(__name__)
+
+GUARD_CONFIG = GuardConfig()
+STATE = StateStore(GUARD_CONFIG.state_db, GUARD_CONFIG)
+
 
 
 @app.get("/80s_SB_logo.png")
@@ -166,6 +176,19 @@ STATUS_ORDER = {
 }
 
 
+def _duration_label(seconds):
+    seconds = max(0, int(seconds or 0))
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes // 60
+    if hours < 48:
+        return f"{hours}h"
+    return f"{hours // 24}d"
+
+
 def result_group(status):
     if status in {"match", "index_match"}:
         return "matches"
@@ -288,6 +311,7 @@ def run_search(query, include_site="", exclude_site=""):
         verbose=False,
         return_stats=True,
         pages=INITIAL_RETRIEVAL_PAGES,
+        request_guard=STATE.reserve_brave_request,
     )
 
     # Keep one canonical candidate object per URL so deeper retrieval can add
@@ -367,6 +391,8 @@ def run_search(query, include_site="", exclude_site=""):
         "stop_reason": None,
     }
 
+    budget_limited = False
+
     if current_match_count() >= ADAPTIVE_MATCH_TARGET:
         adaptive["stop_reason"] = "match target reached in initial retrieval"
     else:
@@ -402,7 +428,16 @@ def run_search(query, include_site="", exclude_site=""):
                     exhausted_branches.add(branch_index)
                     continue
 
-                incoming = brave_search_page(branch_query, next_offset)
+                try:
+                    incoming = brave_search_page(
+                        branch_query,
+                        next_offset,
+                        request_guard=STATE.reserve_brave_request,
+                    )
+                except BraveBudgetExceeded:
+                    adaptive["stop_reason"] = "global Brave request budget reached"
+                    budget_limited = True
+                    break
                 made_request_this_round = True
                 adaptive["deepened"] = True
                 adaptive["extra_requests"] += 1
@@ -446,10 +481,12 @@ def run_search(query, include_site="", exclude_site=""):
                     result_by_key[key] = result
                     results.append(result)
 
-            if not made_request_this_round:
+            if budget_limited or not made_request_this_round:
                 break
 
-        if current_match_count() >= ADAPTIVE_MATCH_TARGET:
+        if budget_limited:
+            adaptive["stop_reason"] = "global Brave request budget reached"
+        elif current_match_count() >= ADAPTIVE_MATCH_TARGET:
             adaptive["stop_reason"] = "match target reached"
         elif adaptive["extra_requests"] >= ADAPTIVE_MAX_EXTRA_REQUESTS:
             adaptive["stop_reason"] = "extra retrieval request budget reached"
@@ -513,21 +550,77 @@ def index():
     exclude_site = request.args.get("exclude_site", "").strip()
     search = None
     error = None
+    http_status = 200
 
     if query:
+        if GUARD_CONFIG.trust_proxy:
+            forwarded = request.headers.get("X-Forwarded-For", "")
+            client_ip = forwarded.split(",", 1)[0].strip() if forwarded else ""
+        else:
+            client_ip = request.remote_addr or ""
+        client_ip = client_ip or "unknown"
+
         try:
-            search = run_search(
+            STATE.check_rate_limit(client_ip)
+
+            cached = STATE.get_cached_search(
                 query,
                 include_site=include_site,
                 exclude_site=exclude_site,
             )
-            error = search.get("error")
+            if cached is not None:
+                search = cached["value"]
+                search["cache"] = {
+                    "hit": True,
+                    "age_seconds": cached["age_seconds"],
+                    "age_label": _duration_label(cached["age_seconds"]),
+                    "ttl_seconds": GUARD_CONFIG.cache_ttl_seconds,
+                    "ttl_label": _duration_label(GUARD_CONFIG.cache_ttl_seconds),
+                }
+                error = search.get("error")
+            else:
+                search = run_search(
+                    query,
+                    include_site=include_site,
+                    exclude_site=exclude_site,
+                )
+                error = search.get("error")
+                search["cache"] = {
+                    "hit": False,
+                    "age_seconds": 0,
+                    "age_label": "0s",
+                    "ttl_seconds": GUARD_CONFIG.cache_ttl_seconds,
+                    "ttl_label": _duration_label(GUARD_CONFIG.cache_ttl_seconds),
+                }
+                if not error:
+                    cache_value = dict(search)
+                    cache_value.pop("cache", None)
+                    STATE.set_cached_search(
+                        query,
+                        include_site,
+                        exclude_site,
+                        cache_value,
+                    )
+        except RateLimitExceeded as exc:
+            minutes = max(1, (exc.retry_after_seconds + 59) // 60)
+            error = (
+                "Search rate limit reached for this address. "
+                f"Try again in about {minutes} minute"
+                f"{'s' if minutes != 1 else ''}."
+            )
+            http_status = 429
+        except BraveBudgetExceeded as exc:
+            error = (
+                "Strictly Boolean has reached its global Brave API "
+                f"{exc.period} request budget. Try again later."
+            )
+            http_status = 503
         except SyntaxError as exc:
             error = str(exc)
         except Exception as exc:
             error = f"Search failed: {exc}"
 
-    return render_template(
+    response = render_template(
         "index.html",
         query=query,
         include_site=include_site,
@@ -535,6 +628,7 @@ def index():
         search=search,
         error=error,
     )
+    return response, http_status
 
 
 if __name__ == "__main__":

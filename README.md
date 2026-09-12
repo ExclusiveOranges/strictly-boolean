@@ -22,6 +22,7 @@ Strictly Boolean supports:
 - transparent explanations of why a result matched, failed, or could not be verified
 - bounded adaptive retrieval
 - concurrent live verification for faster searches
+- persistent API-budget controls, per-IP rate limiting, and repeated-search caching
 
 Results are classified as:
 
@@ -134,6 +135,36 @@ Strictly Boolean reports how many candidates it **examined**. That number is not
 
 The current prototype begins with three Brave result pages per retrieval branch. If too few established matches are found, it can deepen retrieval under a hard extra-request budget. These limits exist to keep retrieval bounded and API usage predictable.
 
+## Public-beta cost controls
+
+Strictly Boolean uses a small local SQLite database to enforce API budgets, rate-limit search traffic, and cache completed searches. The state database is ignored by Git.
+
+The default safeguards are deliberately finite:
+
+- 500 Brave API requests per UTC day
+- 8,000 Brave API requests per UTC month
+- 60 searches per IP address per rolling hour
+- 200 searches per IP address per rolling day
+- 6-hour cache for identical completed searches
+
+Every outbound Brave request is reserved against the global budget **before** it is sent. When a global limit is reached, new uncached searches stop instead of continuing to spend API requests. Cached searches can still be served.
+
+The limits can be changed with environment variables:
+
+```text
+SB_BRAVE_DAILY_LIMIT=500
+SB_BRAVE_MONTHLY_LIMIT=8000
+SB_RATE_LIMIT_HOURLY=60
+SB_RATE_LIMIT_DAILY=200
+SB_SEARCH_CACHE_TTL_SECONDS=21600
+SB_STATE_DB=strictlyboolean_state.sqlite3
+SB_TRUST_PROXY=0
+```
+
+`SB_TRUST_PROXY=1` should be used only behind a trusted reverse proxy that correctly sets `X-Forwarded-For`; otherwise clients could spoof the address used for rate limiting.
+
+The defaults are intended for a small beta, not as universal production values. Hosting environments with ephemeral or read-only filesystems should point `SB_STATE_DB` at persistent writable storage.
+
 ## License detection
 
 License filtering requires affirmative evidence. An undetected license is not treated as "all rights reserved," and a requested license that cannot be established can make an otherwise positive result **UNVERIFIABLE**.
@@ -148,7 +179,7 @@ The repository does not include the optional `80s_SB_logo.png` artwork. If you h
 
 ## Development status
 
-Strictly Boolean is currently a prototype. Before a broad public deployment, the project still needs production-oriented protections such as API-budget controls, rate limiting, caching, deployment hardening, and broader real-world testing.
+Strictly Boolean is currently a prototype. It now includes bounded API-budget controls, per-IP rate limiting, and repeated-search caching. Before a broad public deployment, it still needs deployment hardening, monitoring, and broader real-world testing.
 
 The Flask development server is intended for local development, not production hosting.
 
