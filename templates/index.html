@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>STRICTLY BOOLEAN</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="shell">
+        <header class="masthead">
+            <div class="brand-row">
+                <a id="courier-logo" class="brand" href="/">STRICTLY BOOLEAN</a>
+                <a id="eighties-logo" class="eighties-logo" href="/" hidden aria-label="Strictly Boolean home">
+                    <img src="{{ url_for('eighties_logo') }}" alt="STRICTLY BOOLEAN">
+                </a>
+                <span class="version">v1.5.2 prototype</span>
+            </div>
+            <div class="tagline">Search for what you typed</div>
+            <button id="logo-toggle" class="logo-toggle" type="button" aria-pressed="false">Logo</button>
+        </header>
+
+        <form id="main-search-form" class="search-form" method="get" action="/" autocomplete="off">
+            <input
+                id="query"
+                name="strictly_boolean_input_v125"
+                type="text"
+                value="{{ query|e }}"
+                autocomplete="new-password"
+                autocapitalize="off"
+                autocorrect="off"
+                spellcheck="false"
+                autofocus
+                aria-label="Boolean query"
+            >
+            <input id="submitted-query" name="q" type="hidden" value="{{ query|e }}">
+            <button type="submit">Search</button>
+        </form>
+
+
+
+        <div class="syntax-note">
+            words together = AND · OR · NOT · "exact phrases" · parentheses
+        </div>
+
+        <details class="advanced-search">
+            <summary>Advanced search</summary>
+            <div class="advanced-grid">
+                <label>
+                    <span>All of these words</span>
+                    <input id="adv-all" type="text" autocomplete="off">
+                </label>
+                <label>
+                    <span>Any of these words</span>
+                    <input id="adv-any" type="text" autocomplete="off">
+                </label>
+                <label>
+                    <span>Exact phrase</span>
+                    <input id="adv-exact" type="text" autocomplete="off">
+                </label>
+                <label>
+                    <span>None of these words</span>
+                    <input id="adv-none" type="text" autocomplete="off">
+                </label>
+                <label>
+                    <span>Search within website</span>
+                    <input id="adv-include-site" type="text" autocomplete="off">
+                </label>
+                <label>
+                    <span>Exclude website</span>
+                    <input id="adv-exclude-site" type="text" autocomplete="off">
+                </label>
+            </div>
+
+            <fieldset class="license-picker">
+                <legend>License</legend>
+                <label class="license-shortcut">
+                    <input id="license-any-open" type="checkbox" value="any-open">
+                    <span>Any recognized open license</span>
+                </label>
+
+                <div class="license-columns">
+                    <div>
+                        <div class="license-group-title">Open content &amp; data</div>
+                        <label><input class="license-option" type="checkbox" value="cc-by"> CC BY</label>
+                        <label><input class="license-option" type="checkbox" value="cc-by-sa"> CC BY-SA</label>
+                        <label><input class="license-option" type="checkbox" value="cc-by-nc"> CC BY-NC</label>
+                        <label><input class="license-option" type="checkbox" value="cc-by-nc-sa"> CC BY-NC-SA</label>
+                        <label><input class="license-option" type="checkbox" value="cc0"> CC0</label>
+                        <label><input class="license-option" type="checkbox" value="public-domain"> Public Domain</label>
+                        <label><input class="license-option" type="checkbox" value="gfdl"> GNU FDL</label>
+                        <label><input class="license-option" type="checkbox" value="odbl"> ODbL</label>
+                        <label><input class="license-option" type="checkbox" value="odc-by"> ODC-By</label>
+                        <label><input class="license-option" type="checkbox" value="pddl"> PDDL</label>
+                    </div>
+                    <div>
+                        <div class="license-group-title">Open-source software</div>
+                        <label><input class="license-option" type="checkbox" value="mit"> MIT</label>
+                        <label><input class="license-option" type="checkbox" value="apache-2.0"> Apache 2.0</label>
+                        <label><input class="license-option" type="checkbox" value="gpl"> GNU GPL</label>
+                        <label><input class="license-option" type="checkbox" value="lgpl"> GNU LGPL</label>
+                        <label><input class="license-option" type="checkbox" value="agpl"> GNU AGPL</label>
+                        <label><input class="license-option" type="checkbox" value="bsd-2-clause"> BSD 2-Clause</label>
+                        <label><input class="license-option" type="checkbox" value="bsd-3-clause"> BSD 3-Clause</label>
+                        <label><input class="license-option" type="checkbox" value="isc"> ISC</label>
+                        <label><input class="license-option" type="checkbox" value="mpl-2.0"> MPL 2.0</label>
+                        <label><input class="license-option" type="checkbox" value="epl-2.0"> EPL 2.0</label>
+                    </div>
+                    <div>
+                        <div class="license-group-title">Other Creative Commons</div>
+                        <label><input class="license-option" type="checkbox" value="cc-by-nd"> CC BY-ND</label>
+                        <label><input class="license-option" type="checkbox" value="cc-by-nc-nd"> CC BY-NC-ND</label>
+                        <div class="license-note">ND licenses are selectable individually but are not included in “Any recognized open license.”</div>
+                    </div>
+                </div>
+            </fieldset>
+
+            <div class="advanced-actions">
+                <button id="apply-advanced" type="button">Add to query</button>
+                <span>Adds explicit Boolean, site, and license facets to the main search box.</span>
+            </div>
+        </details>
+
+
+        <script>
+            const searchForm = document.getElementById("main-search-form");
+            const queryInput = document.getElementById("query");
+            const submittedQuery = document.getElementById("submitted-query");
+            const applyAdvanced = document.getElementById("apply-advanced");
+
+            function restoreSearchBox() {
+                if (!queryInput) return;
+                const params = new URLSearchParams(window.location.search);
+                queryInput.value = params.get("q") || "";
+            }
+
+            function quotePhrase(value) {
+                return '"' + value.replace(/"/g, "").trim() + '"';
+            }
+
+            function splitAtoms(value) {
+                const atoms = [];
+                const pattern = /"([^"]+)"|(\S+)/g;
+                let match;
+
+                while ((match = pattern.exec(value.trim())) !== null) {
+                    if (match[1] !== undefined) {
+                        atoms.push('"' + match[1].trim() + '"');
+                    } else if (match[2]) {
+                        atoms.push(match[2]);
+                    }
+                }
+
+                return atoms;
+            }
+
+            function normalizeSite(value) {
+                return value.trim()
+                    .replace(/^https?:\/\//i, "")
+                    .replace(/^www\./i, "")
+                    .replace(/\/.*$/, "");
+            }
+
+            restoreSearchBox();
+            window.addEventListener("pageshow", restoreSearchBox);
+
+            if (applyAdvanced) {
+                applyAdvanced.addEventListener("click", function () {
+                    const parts = [];
+                    const allAtoms = splitAtoms(document.getElementById("adv-all").value);
+                    const anyAtoms = splitAtoms(document.getElementById("adv-any").value);
+                    const exact = document.getElementById("adv-exact").value.trim();
+                    const noneAtoms = splitAtoms(document.getElementById("adv-none").value);
+                    const includeSite = normalizeSite(document.getElementById("adv-include-site").value);
+                    const excludeSite = normalizeSite(document.getElementById("adv-exclude-site").value);
+                    const anyOpen = document.getElementById("license-any-open").checked;
+                    const selectedLicenses = Array.from(document.querySelectorAll(".license-option:checked"))
+                        .map(input => input.value);
+
+                    if (allAtoms.length) parts.push(allAtoms.join(" AND "));
+                    if (anyAtoms.length) parts.push("(" + anyAtoms.join(" OR ") + ")");
+                    if (exact) parts.push(quotePhrase(exact));
+                    if (noneAtoms.length) parts.push(noneAtoms.map(atom => "NOT " + atom).join(" AND "));
+                    if (includeSite) parts.push("site:" + includeSite);
+                    if (excludeSite) parts.push("NOT site:" + excludeSite);
+                    const licenseAtoms = [];
+                    if (anyOpen) licenseAtoms.push("license:any-open");
+                    selectedLicenses.forEach(value => licenseAtoms.push("license:" + value));
+
+                    if (licenseAtoms.length === 1) {
+                        parts.push(licenseAtoms[0]);
+                    } else if (licenseAtoms.length > 1) {
+                        parts.push("(" + licenseAtoms.join(" OR ") + ")");
+                    }
+
+                    if (parts.length) {
+                        const built = parts.join(" AND ");
+                        queryInput.value = queryInput.value.trim()
+                            ? "(" + queryInput.value.trim() + ") AND " + built
+                            : built;
+                        submittedQuery.value = queryInput.value;
+                        queryInput.focus();
+                    }
+                });
+            }
+
+            if (searchForm) {
+                searchForm.addEventListener("submit", function () {
+                    submittedQuery.value = queryInput.value;
+                });
+            }
+        </script>
+
+        {% if error %}
+            <section class="error-box">
+                <strong>Could not run this search.</strong>
+                <span>{{ error }}</span>
+            </section>
+        {% endif %}
+
+        {% if search and not error %}
+            <div class="candidate-summary">
+                <strong>{{ search.counts.matches }} matches</strong> ·
+                {{ search.examined_candidates }} candidates examined
+                {% if search.adaptive_retrieval and search.adaptive_retrieval.deepened %}
+                    · retrieval deepened
+                {% endif %}
+            </div>
+
+            <section class="summary-bar">
+                <button class="filter active" data-filter="matches">
+                    Matches <span>{{ search.counts.matches }}</span>
+                </button>
+                <button class="filter" data-filter="unknown">
+                    Unverifiable <span>{{ search.counts.unknown }}</span>
+                </button>
+                <button class="filter" data-filter="nonmatches">
+                    Non-matches <span>{{ search.counts.nonmatches }}</span>
+                </button>
+                <button class="filter" data-filter="all">
+                    All examined <span>{{ search.examined_candidates }}</span>
+                </button>
+            </section>
+
+            <details class="search-details">
+                <summary>Search details</summary>
+                <div class="detail-grid">
+                    <div>
+                        <div class="detail-label">Parsed expression</div>
+                        <code>{{ search.parsed }}</code>
+                    </div>
+                    <div>
+                        <div class="detail-label">Compiled retrieval</div>
+                        {% for branch in search.plan.queries %}
+                            <code class="branch">{{ branch }}</code>
+                        {% endfor %}
+                    </div>
+                    {% if search.site_filters and (search.site_filters.include or search.site_filters.exclude) %}
+                    <div>
+                        <div class="detail-label">Website constraints</div>
+                        {% for domain in search.site_filters.include %}
+                            <code class="branch">site:{{ domain }}</code>
+                        {% endfor %}
+                        {% for domain in search.site_filters.exclude %}
+                            <code class="branch">NOT site:{{ domain }}</code>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if search.license_filters and search.license_filters.requested %}
+                    <div>
+                        <div class="detail-label">License constraints</div>
+                        {% for item in search.license_filters.requested %}
+                            <code class="branch">license:{{ item }}</code>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div>
+                        <div class="detail-label">Retrieval scope</div>
+                        <span>
+                            {{ search.retrieval_stats.raw_candidates }} raw candidates ·
+                            {{ search.retrieval_stats.duplicate_urls }} duplicate URLs ·
+                            {{ search.retrieval_stats.unique_candidates }} unique retrieved ·
+                            {{ search.examined_candidates }} examined
+                        </span>
+                    </div>
+                    {% if search.adaptive_retrieval %}
+                    <div>
+                        <div class="detail-label">Retrieval depth</div>
+                        <span>
+                            {{ search.retrieval_stats.api_requests }} Brave requests ·
+                            {{ search.adaptive_retrieval.initial_pages_per_branch }} initial pages/branch
+                            {% if search.adaptive_retrieval.deepened %}
+                                · {{ search.adaptive_retrieval.extra_requests }} extra request{% if search.adaptive_retrieval.extra_requests != 1 %}s{% endif %}
+                                · {{ search.adaptive_retrieval.new_unique_candidates }} additional unique candidates
+                            {% else %}
+                                · no deeper retrieval needed
+                            {% endif %}
+                        </span>
+                        <div class="retrieval-stop">Stopped: {{ search.adaptive_retrieval.stop_reason }}.</div>
+                    </div>
+                    {% endif %}
+                </div>
+                <p class="disclosure">
+                    Boolean operators and negative conditions are evaluated locally.
+                    Brave supplies candidates only. Counts describe the candidates Strictly Boolean examined;
+                    they are not an estimate of every matching page on the web.
+                </p>
+            </details>
+
+            <section id="results" class="results">
+                {% for result in search.results %}
+                    <article class="result" data-group="{{ result.group }}">
+                        <div class="result-meta">
+                            <span class="status status-{{ result.status }}">
+                                {{ result.status_label }}
+                            </span>
+                            <span class="evidence">{{ result.evidence_type }}</span>
+                            {% if result.group == "matches" %}<span class="score">rank {{ result.score }}</span>{% endif %}
+                        </div>
+
+                        <h2>
+                            <a href="{{ result.url }}" target="_blank" rel="noopener noreferrer">
+                                {{ result.title }}
+                            </a>
+                        </h2>
+
+                        <div class="url-line">
+                            {% if result.domain %}<span class="domain">{{ result.domain }}</span>{% endif %}
+                            <span class="url">{{ result.url }}</span>
+                        </div>
+
+                        {% if result.licenses %}
+                            <div class="license-evidence">
+                                License detected:
+                                {% for license in result.licenses %}
+                                    <span class="license-badge">{{ license.label }}</span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        {% if result.description %}
+                            <p class="description">{{ result.description }}</p>
+                        {% endif %}
+
+                        {% if result.retrieval_queries %}
+                            <div class="provenance">
+                                Found via:
+                                {% for branch in result.retrieval_queries %}
+                                    <code>{{ branch }}</code>{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        {% if result.live_failure_reason %}
+                            <div class="failure-note">
+                                Live verification unavailable: {{ result.live_failure_reason }}
+                            </div>
+                        {% endif %}
+
+                        <details class="why">
+                            <summary>
+                                {% if result.status in ["match", "index_match"] %}Why this matched
+                                {% elif result.status in ["nonmatch", "index_nonmatch"] %}Why this did not match
+                                {% else %}Why this is unverifiable
+                                {% endif %}
+                            </summary>
+
+                            {% if result.explanation %}
+                                <ul class="logic-list">
+                                    {% for line in result.explanation %}
+                                        <li>{{ line }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p>No sufficient evidence was available to resolve the expression.</p>
+                            {% endif %}
+
+                            {% if result.score_reasons and result.group == "matches" %}
+                                <details class="ranking-details">
+                                    <summary>Ranking details</summary>
+                                    <ul class="rank-list">
+                                        {% for reason in result.score_reasons %}
+                                            <li>{{ reason }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </details>
+                            {% endif %}
+                        </details>
+                    </article>
+                {% endfor %}
+            </section>
+        {% endif %}
+
+    </main>
+
+    <script>
+        (function () {
+            const courierLogo = document.getElementById('courier-logo');
+            const eightiesLogo = document.getElementById('eighties-logo');
+            const toggle = document.getElementById('logo-toggle');
+            if (!courierLogo || !eightiesLogo || !toggle) return;
+
+            function useEighties(enabled) {
+                courierLogo.hidden = enabled;
+                eightiesLogo.hidden = !enabled;
+                toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+                try {
+                    localStorage.setItem('strictlyBooleanLogo', enabled ? '80s' : 'courier');
+                } catch (e) {}
+            }
+
+            // Courier is the default. Reset once for this version so an
+            // earlier saved 80s choice does not override the new default.
+            const defaultVersion = 'courier-v1';
+            let saved = 'courier';
+            try {
+                if (localStorage.getItem('strictlyBooleanLogoDefault') !== defaultVersion) {
+                    localStorage.setItem('strictlyBooleanLogo', 'courier');
+                    localStorage.setItem('strictlyBooleanLogoDefault', defaultVersion);
+                }
+                saved = localStorage.getItem('strictlyBooleanLogo') || 'courier';
+            } catch (e) {}
+            useEighties(saved === '80s');
+
+            toggle.addEventListener('click', function () {
+                useEighties(eightiesLogo.hidden);
+            });
+        })();
+    </script>
+
+    <script>
+        const buttons = document.querySelectorAll('.filter');
+        const results = document.querySelectorAll('.result');
+
+        function setFilter(filter) {
+            buttons.forEach(button => {
+                button.classList.toggle('active', button.dataset.filter === filter);
+            });
+
+            results.forEach(result => {
+                const show = filter === 'all' || result.dataset.group === filter;
+                result.hidden = !show;
+            });
+        }
+
+        buttons.forEach(button => {
+            button.addEventListener('click', () => setFilter(button.dataset.filter));
+        });
+
+        if (buttons.length) {
+            setFilter('matches');
+        }
+    </script>
+</body>
+</html>
