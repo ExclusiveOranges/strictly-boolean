@@ -10,7 +10,7 @@ The central distinction is between **retrieval** and **verification**: the upstr
 
 Strictly Boolean supports:
 
-- - `AND`, `OR`, and `NOT`
+-  `AND`, `OR`, and `NOT`
 - implicit `AND` (`Cat Dog Frog` means `Cat AND Dog AND Frog`)
 - quoted exact phrases
 - parentheses and normal Boolean precedence (`NOT` > `AND` > `OR`)
@@ -68,7 +68,7 @@ The current dependency pins preserve Python 3.8 compatibility.
 Clone the repository and create a virtual environment if desired:
 
 ```bash
-git clone <your-repository-url>
+git clone <https://github.com/ExclusiveOranges/strictly-boolean.git>
 cd strictly-boolean
 python -m venv .venv
 ```
