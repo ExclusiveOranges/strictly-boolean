@@ -68,7 +68,7 @@ The current dependency pins preserve Python 3.8 compatibility.
 Clone the repository and create a virtual environment if desired:
 
 ```bash
-git clone <https://github.com/ExclusiveOranges/strictly-boolean.git>
+git clone https://github.com/ExclusiveOranges/strictly-boolean.git
 cd strictly-boolean
 python -m venv .venv
 ```
