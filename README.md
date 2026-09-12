@@ -10,7 +10,7 @@ The central distinction is between **retrieval** and **verification**: the upstr
 
 Strictly Boolean supports:
 
--  `AND`, `OR`, and `NOT`
+- `AND`, `OR`, and `NOT`
 - implicit `AND` (`Cat Dog Frog` means `Cat AND Dog AND Frog`)
 - quoted exact phrases
 - parentheses and normal Boolean precedence (`NOT` > `AND` > `OR`)
